@@ -57,3 +57,6 @@ db.sqlite3
 
 #venv
 venv/
+
+# IntelliJ IDE files
+.idea

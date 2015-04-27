@@ -1,11 +1,9 @@
 import json
-from datetime import datetime, date, time
 
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test.client import Client, MULTIPART_CONTENT
 from django.test import TestCase
-from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test.utils import override_settings
@@ -25,18 +23,6 @@ class APIClient(Client):
 
     def options(self, path, data='', content_type=MULTIPART_CONTENT, follow=False, **extra):
         return self.generic('OPTIONS', path, data, content_type, **extra)
-
-
-# class CustomJSONEncoder(json.JSONEncoder):
-#     """
-#     Convert datetime/date objects into isoformat
-#     """
-
-#     def default(self, obj):
-#         if isinstance(obj, (datetime, date, time)):
-#             return obj.isoformat()
-#         else:
-#             return super(CustomJSONEncoder, self).default(obj)
 
 
 class BaseAPITestCase(object):
@@ -194,7 +180,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
         self.post(self.password_change_url, status_code=403)
 
         # create user
-        user = User.objects.create_user(self.USERNAME, '', self.PASS)
+        user = get_user_model().objects.create_user(self.USERNAME, '', self.PASS)
 
         self.post(self.login_url, data=payload, status_code=200)
         self.assertEqual('key' in self.response.json.keys(), True)
@@ -222,7 +208,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
             "username": self.USERNAME,
             "password": self.PASS
         }
-        User.objects.create_user(self.USERNAME, '', self.PASS)
+        get_user_model().objects.create_user(self.USERNAME, '', self.PASS)
         self.post(self.login_url, data=login_payload, status_code=200)
         self.token = self.response.json['key']
 
@@ -257,7 +243,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
             "username": self.USERNAME,
             "password": self.PASS
         }
-        User.objects.create_user(self.USERNAME, '', self.PASS)
+        get_user_model().objects.create_user(self.USERNAME, '', self.PASS)
         self.post(self.login_url, data=login_payload, status_code=200)
         self.token = self.response.json['key']
 
@@ -285,7 +271,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
         self.post(self.login_url, data=login_payload, status_code=200)
 
     def test_password_reset(self):
-        user = User.objects.create_user(self.USERNAME, self.EMAIL, self.PASS)
+        user = get_user_model().objects.create_user(self.USERNAME, self.EMAIL, self.PASS)
 
         # call password reset
         mail_count = len(mail.outbox)
@@ -340,7 +326,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
         self.post(self.login_url, data=payload, status_code=200)
 
     def test_user_details(self):
-        user = User.objects.create_user(self.USERNAME, self.EMAIL, self.PASS)
+        user = get_user_model().objects.create_user(self.USERNAME, self.EMAIL, self.PASS)
         payload = {
             "username": self.USERNAME,
             "password": self.PASS
@@ -350,19 +336,19 @@ class APITestCase1(TestCase, BaseAPITestCase):
         self.get(self.user_url, status_code=200)
 
         self.patch(self.user_url, data=self.BASIC_USER_DATA, status_code=200)
-        user = User.objects.get(pk=user.pk)
+        user = get_user_model().objects.get(pk=user.pk)
         self.assertEqual(user.first_name, self.response.json['first_name'])
         self.assertEqual(user.last_name, self.response.json['last_name'])
         self.assertEqual(user.email, self.response.json['email'])
 
     def test_registration(self):
-        user_count = User.objects.all().count()
+        user_count = get_user_model().objects.all().count()
 
         # test empty payload
         self.post(self.register_url, data={}, status_code=400)
 
         self.post(self.register_url, data=self.REGISTRATION_DATA, status_code=201)
-        self.assertEqual(User.objects.all().count(), user_count + 1)
+        self.assertEqual(get_user_model().objects.all().count(), user_count + 1)
         new_user = get_user_model().objects.latest('id')
         self.assertEqual(new_user.username, self.REGISTRATION_DATA['username'])
 
@@ -374,7 +360,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
         ACCOUNT_EMAIL_REQUIRED=True
     )
     def test_registration_with_email_verification(self):
-        user_count = User.objects.all().count()
+        user_count = get_user_model().objects.all().count()
         mail_count = len(mail.outbox)
 
         # test empty payload
@@ -383,7 +369,7 @@ class APITestCase1(TestCase, BaseAPITestCase):
 
         self.post(self.register_url, data=self.REGISTRATION_DATA_WITH_EMAIL,
             status_code=status.HTTP_201_CREATED)
-        self.assertEqual(User.objects.all().count(), user_count + 1)
+        self.assertEqual(get_user_model().objects.all().count(), user_count + 1)
         self.assertEqual(len(mail.outbox), mail_count + 1)
         new_user = get_user_model().objects.latest('id')
         self.assertEqual(new_user.username, self.REGISTRATION_DATA['username'])
@@ -452,19 +438,19 @@ class TestSocialAuth(TestCase, BaseAPITestCase):
         responses.add(responses.GET, self.graph_api_url, body=resp_body,
             status=200, content_type='application/json')
 
-        users_count = User.objects.all().count()
+        users_count = get_user_model().objects.all().count()
         payload = {
             'access_token': 'abc123'
         }
 
         self.post(self.fb_login_url, data=payload, status_code=200)
         self.assertIn('key', self.response.json.keys())
-        self.assertEqual(User.objects.all().count(), users_count + 1)
+        self.assertEqual(get_user_model().objects.all().count(), users_count + 1)
 
         # make sure that second request will not create a new user
         self.post(self.fb_login_url, data=payload, status_code=200)
         self.assertIn('key', self.response.json.keys())
-        self.assertEqual(User.objects.all().count(), users_count + 1)
+        self.assertEqual(get_user_model().objects.all().count(), users_count + 1)
 
     @responses.activate
     @override_settings(
@@ -472,7 +458,7 @@ class TestSocialAuth(TestCase, BaseAPITestCase):
         ACCOUNT_EMAIL_REQUIRED=True,
         REST_SESSION_LOGIN=False
     )
-    def teste_edge_case(self):
+    def test_edge_case(self):
         resp_body = '{"id":"123123123123","first_name":"John","gender":"male","last_name":"Smith","link":"https:\\/\\/www.facebook.com\\/john.smith","locale":"en_US","name":"John Smith","timezone":2,"updated_time":"2014-08-13T10:14:38+0000","username":"john.smith","verified":true,"email":"%s"}'
         responses.add(responses.GET, self.graph_api_url,
             body=resp_body % self.EMAIL,
