@@ -33,11 +33,36 @@ class Login(GenericAPIView):
     response_serializer = TokenSerializer
 
     def login(self):
+        socialdup_check = False
         self.user = self.serializer.validated_data['user']
+        # Social login Duplicate user check
+        if self.serializer.__class__.__name__ == "SocialLoginSerializer":
+            import datetime
+            from django.utils import timezone
+            elapsed_since_joined = timezone.now() - self.user.date_joined
+            # print(elapsed_since_joined)
+            # print(elapsed_since_joined < datetime.timedelta(minutes=1))
+            if (elapsed_since_joined < datetime.timedelta(minutes=1)):
+                if (self.user.email != None):
+                    if (self.user.email != "" or self.user.email != " "):
+                        from django.contrib.auth.models import User
+                        users = User.objects.filter(email__iexact=self.user.email).order_by("date_joined")
+                        if len(users)>1:
+                            # print("Found Duplicate users")
+                            socialdup_check = True
+                            new_user = self.user
+                            new_social = new_user.socialaccount_set.all().first()
+                            self.user = users[0]
+                            new_social.user = self.user
+                            new_social.save()
+                            new_user.delete()
+
         self.token, created = self.token_model.objects.get_or_create(
             user=self.user)
-        if getattr(settings, 'REST_SESSION_LOGIN', True):
-            login(self.request, self.user)
+        if not socialdup_check:
+            # print("not socil dup chek")
+            if getattr(settings, 'REST_SESSION_LOGIN', True):
+                login(self.request, self.user)
 
     def get_response(self):
         return Response(
